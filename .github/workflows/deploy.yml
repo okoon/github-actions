@@ -32,6 +32,44 @@ jobs:
             echo "No Boot JAR found in build/libs"; exit 1
           fi
           echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+      - name: Ensure Java 17 on EC2
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            if command -v java >/dev/null 2>&1; then
+              echo "Java already installed:"
+              java -version
+              exit 0
+            fi
+
+            . /etc/os-release || true
+            ID_L="${ID:-}"; VER="${VERSION_ID:-}"
+
+            if [[ "$ID_L" == "ubuntu" || "$ID_L" == "debian" ]]; then
+              sudo apt-get update -y
+              sudo apt-get install -y openjdk-17-jre-headless
+            elif [[ "$ID_L" == "amzn" && "$VER" == "2" ]]; then
+              sudo yum install -y java-17-amazon-corretto-headless
+            elif [[ "$ID_L" == "amzn" && "$VER" == "2023" ]]; then
+              sudo dnf install -y java-17-amazon-corretto-headless
+            elif [[ "$ID_L" =~ ^(rhel|centos|rocky|almalinux)$ ]]; then
+              if [[ "$VER" == 7* ]]; then
+                sudo yum install -y java-17-openjdk-headless
+              else
+                sudo dnf install -y java-17-openjdk-headless
+              fi
+            elif [[ "$ID_L" == "fedora" ]]; then
+              sudo dnf install -y java-17-openjdk-headless
+            else
+              echo "Unsupported distro: $ID_L $VER"
+              exit 1
+            fi
+
+            java -version
 
       - name: Prepare app dir on EC2
         uses: appleboy/ssh-action@v1.1.0
